@@ -1,4 +1,4 @@
-#include "include/Socket.h"
+#include <Socket.h>
 #include <iostream>
 #include <unistd.h>
 #include <netdb.h>
@@ -21,6 +21,7 @@ Socket::Socket(const Endpoint &endpoint) : endpoint(endpoint), is_bound(false), 
 }
 
 Socket::~Socket() {
+    std::cout << "Socket " << sock << " destroyed!" << std::endl;
     close(sock);
 }
 
@@ -65,7 +66,7 @@ bool Socket::listen() {
 }
 
 
-bool Socket::connect() {
+Connection Socket::connect() {
     if (is_bound)  {
         std::cerr << "Socket is already bound so can't connect" << std::endl;
         return false;
@@ -77,29 +78,89 @@ bool Socket::connect() {
     hints.ai_socktype = SOCK_STREAM;
     if (::getaddrinfo(endpoint.getAddress().c_str(), std::to_string(endpoint.getPort()).c_str(), &hints, &res) != 0) {
         fprintf(stderr,"Getaddrinfo failed. Invalid ip/port");
-        return false;
+        //return false;
     }
 
     if (::connect(sock, res->ai_addr, res->ai_addrlen) < 0){
         perror("connect");
         freeaddrinfo(res);
-        return false;
+        //return false;
     }
 
     freeaddrinfo(res);
     is_connected = true;
-    return true;
+    return Connection(dup(sock));
+
 }
 
 
-bool Socket::accept() {
-    if (!is_bound)
-        return false;
-    sock = ::accept(sock, nullptr, nullptr);
+Connection Socket::accept() {
+//    if (!is_bound)
+//        return false;
+
+    auto temp = ::accept(sock, nullptr, nullptr);
+    return Connection(temp);
+}
+
+int Socket::getSock() const {
+    return sock;
+}
+
+//bool Socket::send(const std::string &msg) {
+//    std::string_view msg_view(msg);
+//
+//    while (!msg_view.empty()) {
+//        int amount_sent = ::write(sock, msg_view.data(), msg_view.length());
+//        if (amount_sent < 0) {
+//            if (errno == EINTR) {
+//                continue;
+//            }
+//            perror("Unexpected error while sending");
+//            return false;
+//        }
+//        msg_view.remove_prefix(amount_sent);
+//    }
+//    return true;
+//}
+
+//bool Socket::recv(int msg_len, std::string *msg) {
+//    struct pollfd pfd;
+//    pfd.fd = sock;
+//    pfd.events = POLLIN;
+//    char* buf = new char[msg_len + 1];
+//    char* ptr = buf;
+//    while (msg_len > 0) {
+//        if (poll(&pfd, 1, 3000) == 0)
+//            break;
+//        int amount_read = ::recv(sock, ptr, msg_len, 0);
+//        msg_len -= amount_read;
+//        ptr += amount_read;
+//    }
+//    *msg = buf;
+//    delete[] buf;
+//    return true;
+//}
+
+
+bool Connection::recv(int msg_len, std::string *msg) {
+    struct pollfd pfd;
+    pfd.fd = sock;
+    pfd.events = POLLIN;
+    char* buf = new char[msg_len + 1];
+    char* ptr = buf;
+    while (msg_len > 0) {
+        if (poll(&pfd, 1, 3000) == 0)
+            break;
+        int amount_read = ::recv(sock, ptr, msg_len, 0);
+        msg_len -= amount_read;
+        ptr += amount_read;
+    }
+    *msg = buf;
+    delete[] buf;
     return true;
 }
 
-bool Socket::send(const std::string &msg) {
+bool Connection::send(const std::string &msg) {
     std::string_view msg_view(msg);
 
     while (!msg_view.empty()) {
@@ -116,20 +177,12 @@ bool Socket::send(const std::string &msg) {
     return true;
 }
 
-bool Socket::recv(int msg_len, std::string *msg) {
-    struct pollfd pfd;
-    pfd.fd = sock;
-    pfd.events = POLLIN;
-    char* buf = new char[msg_len + 1];
-    char* ptr = buf;
-    while (msg_len > 0) {
-        if (poll(&pfd, 1, 3000) == 0)
-            break;
-        int amount_read = ::recv(sock, ptr, msg_len, 0);
-        msg_len -= amount_read;
-        ptr += amount_read;
-    }
-    *msg = buf;
-    delete[] buf;
-    return true;
+Connection::Connection(int sock) : sock(sock){}
+
+Connection::Connection(Connection &&conn) {
+    sock = std::move(conn.sock);
+}
+
+int Connection::getSock() const {
+    return sock;
 }

@@ -1,7 +1,11 @@
 #include <ctime>
 #include <sstream>
 #include <iomanip>
-#include "applications/http_server/include/HTTP_Server.h"
+#include <HTTP_Server.h>
+#include <poll.h>
+#include <vector>
+#include <iostream>
+#include <zconf.h>
 
 std::string getDate() {
     std::time_t t = std::time(nullptr);
@@ -94,4 +98,57 @@ std::string HTTP_Server::get_response_header(const ResponseCode &code) {
     std::string result(res);
     delete[] res;
     return result;
+}
+
+void HTTP_Server::run() {
+    int max = 1000;
+    int active = 2;
+    while(1) {
+        if (poll(polls.data(), (nfds_t) active, -1) < 0) {
+            if (errno == EINTR) //Alarm arrived, just continue.
+                continue;
+            perror("Poll failed");
+            break;
+        }
+        if (polls[0].revents & POLLIN) {
+            Connection c = command_socket.accept();
+            polls.push_back(pollfd());
+            polls[polls.size() - 1].fd = c.getSock();
+            polls[polls.size() - 1].events = POLLIN;
+            active++;
+        } else if (polls[1].revents & POLLIN) {
+            Connection c = request_socket.accept();
+            std::cout << "Request on " << c.getSock() << std::endl;
+            c.send(HTTP_Server::get_response_header(ResponseCode::OK));
+        } else {
+            for (int j = 2; j < active; j++) {
+                if (polls[j].revents & POLLIN) {
+                    std::cout << ("Command in already accepted socket\n") << std::endl;
+                    Connection c(polls[j].fd);
+                    c.send(HTTP_Server::get_response_header(ResponseCode::FORBIDDEN));
+                    break;
+                }
+            }
+        }
+    }
+
+    for (int i = 2; i < polls.size(); i++) {
+        if (polls[i].fd != -1)
+            close(polls[i].fd);
+    }
+}
+
+HTTP_Server::HTTP_Server() : command_socket(Endpoint(SERVER_ADDRESS, COMMAND_PORT)), request_socket(Endpoint(SERVER_ADDRESS, REQUEST_PORT)) {
+    command_socket.bind();
+    command_socket.listen();
+    request_socket.bind();
+    request_socket.listen();
+
+    polls.emplace_back(pollfd());
+    polls[0].fd = command_socket.getSock();
+    polls[0].events = POLLIN;
+
+    polls.emplace_back(pollfd());
+    polls[1].fd = request_socket.getSock();
+    polls[1].events = POLLIN;
 }

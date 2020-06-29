@@ -2,6 +2,13 @@
 #define HTTP_SERVER_HTTP_SERVER_H
 
 #include <string>
+#include <Socket.h>
+#include <vector>
+#include <poll.h>
+
+const std::string SERVER_ADDRESS = "localhost";
+const int COMMAND_PORT = 9090;
+const int REQUEST_PORT = 9091;
 
 enum class ResponseCode{
     OK                   = 200,
@@ -14,8 +21,15 @@ enum class ResponseCode{
 };
 
 class HTTP_Server {
+    Socket request_socket;
+    Socket command_socket;
+    std::vector<pollfd> polls;
 public:
     static std::string get_response_header(const ResponseCode& code);
+
+    HTTP_Server();
+
+    void run();
 };
 
 

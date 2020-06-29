@@ -1,4 +1,4 @@
-#include "applications/http_server/include/MessageQueue.h"
+#include <MessageQueue.h>
 #include <iostream>
 
 MessageQueue::MessageQueue() {

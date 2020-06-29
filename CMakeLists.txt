@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.17)
 project(http_server)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 # Download and unpack googletest at configure time
 configure_file(CMakeLists.txt.in googletest-download/CMakeLists.txt)
@@ -37,7 +37,7 @@ endif()
 
 # end google tests
 
-include_directories(.)
+include_directories(include)
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
