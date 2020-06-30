@@ -37,12 +37,12 @@ endif()
 
 # end google tests
 
-include_directories(include)
+include_directories(.)
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
 
-set(SOURCE_FILES src/Socket.cpp)
+set(SOURCE_FILES)
 
 add_executable(http_server socket_main.cpp ${SOURCE_FILES})
 target_link_libraries(http_server Threads::Threads)

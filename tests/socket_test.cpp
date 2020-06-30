@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <Socket.h>
-
+using namespace SocketLayer;
 TEST(SocketTest, ServerTest){
     Socket server(Endpoint("localhost", 8080));
 

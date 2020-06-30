@@ -1,42 +1,108 @@
-#include <Socket.h>
-#include <iostream>
-#include <unistd.h>
+#ifndef HTTP_SERVER_SOCKET_H
+#define HTTP_SERVER_SOCKET_H
+
+#include <string>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <poll.h>
 #include <fcntl.h>
+#include <iostream>
+#include <unistd.h>
 #include <vector>
 
-Endpoint::Endpoint(const std::string& address, port_t port) : address(address), port(port) {}
+namespace SocketLayer {
 
-port_t Endpoint::getPort() const {
+
+typedef int port_t;
+const int MAX_CLIENTS = 10;
+
+class Endpoint {
+    std::string address;
+public:
+    const std::string& getAddress() const;
+private:
+    port_t port;
+public:
+    port_t getPort() const;
+
+public:
+    Endpoint(const std::string& address, port_t port);
+};
+
+class Connection {
+    int sock;
+public:
+    Connection(int sock);
+
+    Connection(Connection& conn) = delete;
+
+    Connection(Connection&& conn);
+
+    void shutdown();
+
+    int getSock() const;
+
+    bool isValid() const;
+
+    bool recv(int msg_len, std::string* msg) const;
+
+    bool send(const std::string& msg) const;
+};
+
+
+class Socket {
+    Endpoint endpoint;
+    int sock;
+    bool is_bound;
+    bool is_connected;
+public:
+    Socket(const Endpoint& endpoint);
+
+    virtual ~Socket();
+
+    bool bind();
+
+    bool listen();
+
+    Connection connect();
+
+    Connection accept();
+
+    int getSock() const;
+};
+
+// Implementation
+inline Endpoint::Endpoint(const std::string& address, port_t port) : address(address), port(port) {}
+
+inline port_t Endpoint::getPort() const {
     return port;
 }
 
-const std::string& Endpoint::getAddress() const {
+inline const std::string& Endpoint::getAddress() const {
     return address;
 }
 
 
-
-Socket::Socket(const Endpoint &endpoint) : endpoint(endpoint), is_bound(false), is_connected(false) {
+inline Socket::Socket(const Endpoint& endpoint) : endpoint(endpoint), is_bound(false), is_connected(false) {
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == -1)
         perror("Invalid socket");
 }
 
-Socket::~Socket() {
+inline Socket::~Socket() {
     std::cout << "Socket " << sock << " destroyed!" << std::endl;
     close(sock);
 }
 
-bool Socket::bind() {
+inline bool Socket::bind() {
     if (is_connected) {
         std::cerr << "Socket is already connected so can't bind" << std::endl;
         return false;
     }
 
     int on = 1;
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) < 0) {
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*) &on, sizeof(on)) < 0) {
         perror("setsockopt() failed");
         return false;
     }
@@ -46,7 +112,7 @@ bool Socket::bind() {
     server.sin_addr.s_addr = htonl(INADDR_ANY);
     server.sin_port = htons((uint16_t) endpoint.getPort());
 
-    if (::bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
+    if (::bind(sock, (struct sockaddr*) &server, sizeof(server)) < 0) {
         perror("Failed to bind socket.");
         return false;
     }
@@ -54,24 +120,24 @@ bool Socket::bind() {
     return true;
 }
 
-bool Socket::listen() {
+inline bool Socket::listen() {
     if (!is_bound) {
         std::cerr << "You must bind before listening" << std::endl;
         return false;
     }
 
-    if (::listen(sock, MAX_CLIENTS) < 0){
+    if (::listen(sock, MAX_CLIENTS) < 0) {
         perror("Socket listen failed");
         return false;
     }
 
-    std::cout  << "Socket " << sock << " is listening on port " << endpoint.getPort() << std::endl;
+    std::cout << "Socket " << sock << " is listening on port " << endpoint.getPort() << std::endl;
     return true;
 }
 
 
-Connection Socket::connect() {
-    if (is_bound)  {
+inline Connection Socket::connect() {
+    if (is_bound) {
         std::cerr << "Socket is already bound so can't connect" << std::endl;
         return Connection(-1);
     }
@@ -80,12 +146,13 @@ Connection Socket::connect() {
     struct addrinfo hints = {0};
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
-    if (::getaddrinfo(endpoint.getAddress().c_str(), std::to_string(endpoint.getPort()).c_str(), &hints, &res) != 0) {
-        fprintf(stderr,"Getaddrinfo failed. Invalid ip/port");
+    if (::getaddrinfo(endpoint.getAddress().c_str(), std::to_string(endpoint.getPort()).c_str(), &hints, &res) !=
+        0) {
+        fprintf(stderr, "Getaddrinfo failed. Invalid ip/port");
         return Connection(-1);
     }
 
-    if (::connect(sock, res->ai_addr, res->ai_addrlen) < 0){
+    if (::connect(sock, res->ai_addr, res->ai_addrlen) < 0) {
         perror("connect");
         freeaddrinfo(res);
         return Connection(-1);
@@ -98,7 +165,7 @@ Connection Socket::connect() {
 }
 
 
-Connection Socket::accept() {
+inline Connection Socket::accept() {
     if (!is_bound)
         return Connection(-1);
 
@@ -106,17 +173,17 @@ Connection Socket::accept() {
     return Connection(temp);
 }
 
-int Socket::getSock() const {
+inline int Socket::getSock() const {
     return sock;
 }
 
-Connection::Connection(int sock) : sock(dup(sock)){}
+inline Connection::Connection(int sock) : sock(dup(sock)) {}
 
-Connection::Connection(Connection &&conn) {
+inline Connection::Connection(Connection&& conn) {
     sock = dup(conn.sock);
 }
 
-bool Connection::recv(int msg_len, std::string *msg) const {
+inline bool Connection::recv(int msg_len, std::string* msg) const {
     struct pollfd pfd{};
     pfd.fd = sock;
     pfd.events = POLLIN;
@@ -133,12 +200,12 @@ bool Connection::recv(int msg_len, std::string *msg) const {
         buffer.clear();
     }
     std::cout << "-------Message--------" << std::endl;
-    std::cout <<  *msg << std::endl;
+    std::cout << *msg << std::endl;
     std::cout << "-----Message End------" << std::endl;
     return true;
 }
 
-bool Connection::send(const std::string &msg) const{
+inline bool Connection::send(const std::string& msg) const {
     std::string_view msg_view(msg);
 
     while (!msg_view.empty()) {
@@ -156,16 +223,19 @@ bool Connection::send(const std::string &msg) const{
 }
 
 
-int Connection::getSock() const {
+inline int Connection::getSock() const {
     return sock;
 }
 
-bool Connection::isValid() const{
+inline bool Connection::isValid() const {
     return sock != -1;
 }
 
-void Connection::shutdown() {
+inline void Connection::shutdown() {
     ::shutdown(sock, 2);
     sock = -1;
 }
 
+
+} // namespace
+#endif //HTTP_SERVER_SOCKET_H

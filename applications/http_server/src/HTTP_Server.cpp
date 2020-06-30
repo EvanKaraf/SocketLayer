@@ -6,6 +6,8 @@
 #include <thread>
 #include <sys/utsname.h>
 
+using namespace SocketLayer;
+
 void HTTP_Server::run() {
     while(1) {
         if (wait_for_connection() < 0) {

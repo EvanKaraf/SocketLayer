@@ -21,8 +21,8 @@ enum class ResponseCode{
 };
 
 class HTTP_Server {
-    Socket request_socket;
-    Socket command_socket;
+    SocketLayer::Socket request_socket;
+    SocketLayer::Socket command_socket;
     std::vector<pollfd> polls;
 
     int wait_for_connection();

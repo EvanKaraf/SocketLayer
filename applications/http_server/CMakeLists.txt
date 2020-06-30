@@ -1,6 +1,6 @@
 
 include_directories(include)
-set(SOURCE_FILES_HTTP_SERVER src/HTTP_Server.cpp src/MessageQueue.cpp ../../src/Socket.cpp)
+set(SOURCE_FILES_HTTP_SERVER src/HTTP_Server.cpp src/MessageQueue.cpp)
 
 add_executable(Server ${SOURCE_FILES_HTTP_SERVER} main.cpp)
 target_link_libraries(Server  Threads::Threads)
