@@ -1,11 +1,72 @@
 #include <ctime>
-#include <sstream>
 #include <iomanip>
 #include <HTTP_Server.h>
 #include <poll.h>
-#include <vector>
 #include <iostream>
-#include <zconf.h>
+#include <thread>
+#include <sys/utsname.h>
+
+void HTTP_Server::run() {
+    while(1) {
+        if (wait_for_connection() < 0) {
+            perror("Poll failed");
+            break;
+        }
+
+        if (is_command_connection()) {
+            Connection c = command_socket.accept();
+            std::cout << "Command on " << c.getSock() << std::endl;
+            std::thread t([&c ](){
+                std::string msg;
+                c.recv(-1, &msg);
+                c.send(HTTP_Server::create_response_header(ResponseCode::NOT_FOUND));
+                c.shutdown();
+            });
+            t.join();
+        } else {
+            Connection c = request_socket.accept();
+            std::cout << "Request on " << c.getSock() << std::endl;
+            std::thread t([&c](){
+                            std::string msg;
+                            c.recv(-1, &msg);
+                            c.send(HTTP_Server::create_response_header(ResponseCode::OK));
+                            c.shutdown();
+                        });
+            t.join();
+        }
+    }
+}
+
+HTTP_Server::HTTP_Server() : command_socket(Endpoint(SERVER_ADDRESS, COMMAND_PORT)), request_socket(Endpoint(SERVER_ADDRESS, REQUEST_PORT)) {
+    command_socket.bind();
+    command_socket.listen();
+    request_socket.bind();
+    request_socket.listen();
+
+    polls.emplace_back(pollfd());
+    polls[0].fd = command_socket.getSock();
+    polls[0].events = POLLIN;
+
+    polls.emplace_back(pollfd());
+    polls[1].fd = request_socket.getSock();
+    polls[1].events = POLLIN;
+}
+
+int HTTP_Server::wait_for_connection() {
+    return poll(&polls[0], (nfds_t) polls.size(), -1);
+}
+
+int HTTP_Server::is_command_connection() {
+    return polls[0].revents & POLLIN;
+}
+
+std::string getOSName() {
+    struct utsname *buf = new utsname();
+    uname(buf);
+    std::string name(buf->sysname);
+    delete(buf);
+    return name;
+}
 
 std::string getDate() {
     std::time_t t = std::time(nullptr);
@@ -15,7 +76,7 @@ std::string getDate() {
     return out.str();
 }
 
-std::string HTTP_Server::get_response_header(const ResponseCode &code) {
+std::string HTTP_Server::create_response_header(const ResponseCode &code) {
     std::string ok_prefix  = "HTTP/1.1 200 OK\r\n";
     std::string ok_content = "<html>You did it.</html>\r\n";
 
@@ -79,76 +140,23 @@ std::string HTTP_Server::get_response_header(const ResponseCode &code) {
             content = invalid_http_version_content;
             break;
     }
-    std::string os = "linux";
+
     int len = snprintf(nullptr, 0,
-                        response_to_fill.c_str(),
-                        prefix.c_str(),
-                        getDate().c_str(),
-                        os.c_str(),
-                        std::to_string(content.size()).c_str(),
-                        content.c_str());
+                       response_to_fill.c_str(),
+                       prefix.c_str(),
+                       getDate().c_str(),
+                       getOSName().c_str(),
+                       std::to_string(content.size()).c_str(),
+                       content.c_str());
     char* res = new char[(len + 1)];
     sprintf(res,
             response_to_fill.c_str(),
             prefix.c_str(),
             getDate().c_str(),
-            os.c_str(),
+            getOSName().c_str(),
             std::to_string(content.size()).c_str(),
             content.c_str());
     std::string result(res);
     delete[] res;
     return result;
-}
-
-void HTTP_Server::run() {
-    int max = 1000;
-    int active = 2;
-    while(1) {
-        if (poll(polls.data(), (nfds_t) active, -1) < 0) {
-            if (errno == EINTR) //Alarm arrived, just continue.
-                continue;
-            perror("Poll failed");
-            break;
-        }
-        if (polls[0].revents & POLLIN) {
-            Connection c = command_socket.accept();
-            polls.push_back(pollfd());
-            polls[polls.size() - 1].fd = c.getSock();
-            polls[polls.size() - 1].events = POLLIN;
-            active++;
-        } else if (polls[1].revents & POLLIN) {
-            Connection c = request_socket.accept();
-            std::cout << "Request on " << c.getSock() << std::endl;
-            c.send(HTTP_Server::get_response_header(ResponseCode::OK));
-        } else {
-            for (int j = 2; j < active; j++) {
-                if (polls[j].revents & POLLIN) {
-                    std::cout << ("Command in already accepted socket\n") << std::endl;
-                    Connection c(polls[j].fd);
-                    c.send(HTTP_Server::get_response_header(ResponseCode::FORBIDDEN));
-                    break;
-                }
-            }
-        }
-    }
-
-    for (int i = 2; i < polls.size(); i++) {
-        if (polls[i].fd != -1)
-            close(polls[i].fd);
-    }
-}
-
-HTTP_Server::HTTP_Server() : command_socket(Endpoint(SERVER_ADDRESS, COMMAND_PORT)), request_socket(Endpoint(SERVER_ADDRESS, REQUEST_PORT)) {
-    command_socket.bind();
-    command_socket.listen();
-    request_socket.bind();
-    request_socket.listen();
-
-    polls.emplace_back(pollfd());
-    polls[0].fd = command_socket.getSock();
-    polls[0].events = POLLIN;
-
-    polls.emplace_back(pollfd());
-    polls[1].fd = request_socket.getSock();
-    polls[1].events = POLLIN;
 }

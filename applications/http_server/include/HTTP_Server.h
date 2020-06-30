@@ -7,8 +7,8 @@
 #include <poll.h>
 
 const std::string SERVER_ADDRESS = "localhost";
-const int COMMAND_PORT = 9090;
-const int REQUEST_PORT = 9091;
+const int COMMAND_PORT = 7070;
+const int REQUEST_PORT = 7071;
 
 enum class ResponseCode{
     OK                   = 200,
@@ -24,12 +24,17 @@ class HTTP_Server {
     Socket request_socket;
     Socket command_socket;
     std::vector<pollfd> polls;
+
+    int wait_for_connection();
+    int is_command_connection();
+
 public:
-    static std::string get_response_header(const ResponseCode& code);
+    static std::string create_response_header(const ResponseCode& code);
 
     HTTP_Server();
 
     void run();
+
 };
 
 

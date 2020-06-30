@@ -26,13 +26,16 @@ class Connection {
     int sock;
 public:
     Connection(int sock);
-
-    int getSock() const;
-
     Connection(Connection& conn) = delete;
     Connection(Connection&& conn);
-    bool recv(int msg_len, std::string* msg);
-    bool send(const std::string& msg);
+
+    void shutdown();
+
+    int getSock() const;
+    bool isValid() const;
+
+    bool recv(int msg_len, std::string* msg) const;
+    bool send(const std::string& msg) const;
 };
 
 

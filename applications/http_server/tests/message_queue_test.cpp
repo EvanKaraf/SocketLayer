@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <thread>
-#include <applications/http_server/include/MessageQueue.h>
+#include <MessageQueue.h>
 
 using namespace std;
 
